@@ -208,6 +208,34 @@ podman rm $container
 
 NOTE:  Add some information on rootless containers.
 
+== **Building image using Containerfile / Dockerfile**
+
+Now that we know more about buildah and build process lets do the same thing in a simpler manner and while we doing this lets try to make our image smaller!
+To make our image smaller we will be using the ubi-minimal as base image and we clean up after the httpd package installation.
+
+```
+cat << EOF > Containerfile
+# Use Fedora 33 as base image
+FROM registry.access.redhat.com/ubi8/ubi-minimal
+
+# Install httpd
+RUN microdnf install -y httpd --nodocs --setopt install_weak_deps=0 && \
+    microdnf clean all -y
+
+# Copy the website
+COPY index1.html /var/www/html/
+
+# Expose Port 80/tcp
+EXPOSE 80
+
+# Start httpd
+CMD ["httpd", "-DFOREGROUND"]
+EOF
+########
+buildah -t localhost/el-httpd-small build Containerfile
+```
+
+image::httpd-micro.png[700,700]
 
 = [aqua]**References:**
 
