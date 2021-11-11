@@ -1,0 +1,220 @@
+ifdef::env-github[]
+:toc: macro
+:outfilesuffix: .adoc
+:!toc-title:
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::[]
+
+:imagesdir: img
+
+= **Container tools**
+
+== [aqua]**Buildah 101 Lab**
+
+
+
+I have changed the commands a bit so I can use a rootless container.A non-root user is used outside the container and a non-root user is used inside the container too.
+
+=== [aqua]*Creating a new image*
+
+Two Methods of creating a new image will be viewed:
+
+    * Using a UBI to get things started
+    * Building a new container from scratch
+
+==== [aqua]*The UBI Method:*
+
+First, have a look at what UBI images are available:
+
+```
+podman search ubi
+``` 
+
+image::ubi-image.png[500,500]
+
+In this lab, we will use the ubi-init image since it includes systemd and has the yum command installed.
+
+```
+buildah from registry.access.redhat.com/ubi8/ubi-init
+```
+
+image::build-image.png[500,500]
+ 
+Lets check and see the newly build image:
+
+```
+buildah images
+```
+
+image::validate-image.png[800,800]
+
+DEL: Notice that the name of the container being built is "ubi-init-working-container-2".  The suffix "-working-container" is always added.  Any training digits will be present if an earlier container of the same name was constructed.  In my notes, I am creating my third image here.
+
+Now, let's install the Apache web server.  As I mentioned earlier, I'm using the ubi-init image since it contains yum and systemd.  This makes it a bit easier to get started with simple tests of creating new container images.
+
+```
+buildah run ubi-init-working-container -- yum -y install httpd
+``` 
+image::httpd-inst.png[1000,1000]
+image::httpd-inst2.png[1000,1000]
+
+
+
+Yum takes care of all the dependencies making this nice and clean.  You will see in the build from scratch example that yum can pull in *all* needed userland components.  Nice!
+
+Now that Apache is installed, let's enable the service.
+
+```
+buildah run ubi-init-working-container -- systemctl enable httpd
+```
+image::httpd-enable.png[1000,1000]
+
+The service is now enabled within the container.  Whenever this image is used and started, the httpd service will automatically start.
+
+Let's build an copy in a simple default web page with a message indicating how the image was created.
+
+```
+cat << EOF > index1.html 
+<!doctype html>
+<html>
+  <head>
+    <title>Buildah Lab</title>
+  </head>
+  <body>
+    <p>This is the container image created with Buildah and the ubi8-init image!</p>
+  </body>
+</html>
+EOF
+# Copy file to image
+buildah copy ubi-init-working-container index1.html /var/www/html/index.html
+```
+
+Not much to talk about here other than a new layer was created within the container image.
+
+The last step is to expose the web server port and to start up systemd upon starting the container. 
+
+```
+buildah config --port 80 --cmd "/usr/sbin/init" ubi-init-working-container
+```
+
+The buildah config command modifies the metadata of the container image.
+
+We are done with the image now, so let's commit the working-container image to an application image called el-httpd1.
+
+```
+buildah commit ubi-init-working-container el-httpd1
+```
+
+image::httpd-commit.png[1000,1000]
+
+
+The image is now ready for us to use.  Let's view the images on our system:
+
+```
+buildah images
+```
+image::httpd-images.png[1000,1000]
+
+
+Time to run the image!
+
+```
+podman run -d -p 80:80 el-httpd1
+```
+
+OOPS: 
+
+image::httpd-images.png[1000,1000]
+We are running this as a non-root (rootless) container, so we can't use port 80 on the outside.  We need to forwarding port 8080 on the outside to port 80 on the inside.
+
+```
+podman run -d -p 8080:80 el-httpd1
+podman ps
+```
+image::httpd-run.png[1000,1000]
+
+
+Connect to the container with your web browser:
+
+```
+curl -k localhost:8080
+```
+image::httpd-valid.png[1000,1000]
+
+This is an example of a rootless container. We are non-root on the outside, but what are we on the inside? Let's have a look.
+
+On the outside we have just a regular user:
+
+```
+id
+```
+
+image::id-out.png[1000,1000]
+
+And, on the inside what do we have? Let's have a look:
+
+```
+export container=`podman ps | awk '{ print $1 }' |sed '2,2!d'`
+podman exec -it $container /bin/bash
+```
+
+Now we are in side the container so let's run the id gain and see who we are!
+
+```
+id
+exit
+```
+
+image::id-in.png[1000,1000]
+
+We are root on the inside! However, if we look on the host, the process is actually running as the regular user we saw before. So, inside the container we are root and can manage the inside of the container as a privileged user, but on the outside we are just a regular user. This is much better than standard docker. So, how can we be rootless both inside and outside of the container? We can use podman's -u option to specify a user inside the container. Remember, the container has its own /etc/passwd and /etc/group file, so we have options. Let's do a little experiment with a new container.
+
+```
+podman stop -a
+podman run -u sync -d -p 8080:80 el-httpd1
+export container=`podman ps | awk '{ print $1 }' |sed '2,2!d'`
+podman exec -it $container /bin/bash
+```
+
+```
+id
+exit
+```
+
+image::id-in-user.png[1000,1000]
+ 
+
+Cool! Inside the container, we are running as the sync process. This configuration is known as a rootless container running non-root. This is considered the ideal state from a security perspective since we are rootless both outside and inside the container. We did this entire process as a not root user. This shows that your development environments can still function without root privileges. Sweet!
+
+Now, have a look at the image metadata of the image to see that the ports match what we see with podman ps.
+
+```
+buildah inspect localhost/el-httpd1
+```
+
+image::inspect-docker.png[1000,1000]
+image::inspect-crio.png[1000,1000]
+
+
+Shut it down and clean up!
+
+```
+podman stop -a
+export container=`podman ps -a | awk '{ print $1 }' |sed '2,2!d'`
+podman rm $container
+```
+
+NOTE:  Add some information on rootless containers.
+
+
+= [aqua]**Refrences:**
+
+* The online lab can be found here:  https://lab.redhat.com/buildah
+
+NOTE:  The lab has not been working well and errors out during the creation of the container.The same commands work fine on local system, so there must be an issue with the Katacoda environment.
+
+* Build smaller container https://fedoramagazine.org/build-smaller-containers/
