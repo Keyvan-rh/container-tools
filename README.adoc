@@ -237,6 +237,10 @@ buildah -t localhost/el-httpd-small build Containerfile
 
 image::httpd-micro.png[700,700]
 
+if you check the size of the new image vs the old one we build you can see that much smaller 159MB vs 256MB
+
+image::small-big.png[700,700]
+
 = [aqua]**References:**
 
 * The online lab can be found here:  https://lab.redhat.com/buildah
