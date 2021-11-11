@@ -52,8 +52,6 @@ buildah images
 
 image::validate-image.png[800,800]
 
-DEL: Notice that the name of the container being built is "ubi-init-working-container-2".  The suffix "-working-container" is always added.  Any training digits will be present if an earlier container of the same name was constructed.  In my notes, I am creating my third image here.
-
 Now, let's install the Apache web server.  As I mentioned earlier, I'm using the ubi-init image since it contains yum and systemd.  This makes it a bit easier to get started with simple tests of creating new container images.
 
 ```
@@ -143,7 +141,7 @@ Connect to the container with your web browser:
 ```
 curl -k localhost:8080
 ```
-image::httpd-valid.png[1000,1000]
+image::httpd-valid.png[500,500]
 
 This is an example of a rootless container. We are non-root on the outside, but what are we on the inside? Let's have a look.
 
@@ -185,7 +183,7 @@ id
 exit
 ```
 
-image::id-in-user.png[1000,1000]
+image::id-in-user.png[500,500]
  
 
 Cool! Inside the container, we are running as the sync process. This configuration is known as a rootless container running non-root. This is considered the ideal state from a security perspective since we are rootless both outside and inside the container. We did this entire process as a not root user. This shows that your development environments can still function without root privileges. Sweet!
@@ -197,7 +195,7 @@ buildah inspect localhost/el-httpd1
 ```
 
 image::inspect-docker.png[1000,1000]
-image::inspect-crio.png[1000,1000]
+image::inspect-crio.png[700,700]
 
 
 Shut it down and clean up!
@@ -211,7 +209,7 @@ podman rm $container
 NOTE:  Add some information on rootless containers.
 
 
-= [aqua]**Refrences:**
+= [aqua]**References:**
 
 * The online lab can be found here:  https://lab.redhat.com/buildah
 
